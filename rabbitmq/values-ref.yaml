@@ -2,7 +2,6 @@
 ## Global Docker image parameters
 ## Please, note that this will override the image parameters, including dependencies, configured to use the global value
 ## Current available global Docker image parameters: imageRegistry, imagePullSecrets and storageClass
-##
 
 ## @param global.imageRegistry Global Docker image registry
 ## @param global.imagePullSecrets Global Docker registry secret names as an array
@@ -30,7 +29,7 @@ global:
 image:
   registry: docker.io
   repository: bitnami/rabbitmq
-  tag: 3.9.14-debian-10-r15
+  tag: 3.9.10-debian-10-r4
 
   ## set to true if you would like to see extra information on logs
   ## It turns BASH and/or NAMI debugging in the image
@@ -39,7 +38,7 @@ image:
 
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
-  ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
   ##
   pullPolicy: IfNotPresent
   ## Optionally specify an array of imagePullSecrets.
@@ -52,7 +51,6 @@ image:
   pullSecrets: []
 
 ## @section Common parameters
-##
 
 ## @param nameOverride String to partially override rabbitmq.fullname template (will maintain the release name)
 ##
@@ -102,12 +100,12 @@ auth:
   ## @param auth.username RabbitMQ application username
   ## ref: https://github.com/bitnami/bitnami-docker-rabbitmq#environment-variables
   ##
-  username: user
+  username: admin
 
   ## @param auth.password RabbitMQ application password
   ## ref: https://github.com/bitnami/bitnami-docker-rabbitmq#environment-variables
   ##
-  password: ""
+  password: "Abcd123$"
   ## @param auth.existingPasswordSecret Existing secret with RabbitMQ credentials (must contain a value for `rabbitmq-password` key)
   ## e.g:
   ## existingPasswordSecret: name-of-existing-secret
@@ -117,7 +115,7 @@ auth:
   ## @param auth.erlangCookie Erlang cookie to determine whether different nodes are allowed to communicate with each other
   ## ref: https://github.com/bitnami/bitnami-docker-rabbitmq#environment-variables
   ##
-  erlangCookie: ""
+  erlangCookie: "erlangCookie"
   ## @param auth.existingErlangSecret Existing secret with RabbitMQ Erlang cookie (must contain a value for `rabbitmq-erlang-cookie` key)
   ## e.g:
   ## existingErlangSecret: name-of-existing-secret
@@ -218,7 +216,7 @@ clustering:
   ## forceBoot executes 'rabbitmqctl force_boot' to force boot cluster shut down unexpectedly in an unknown order
   ## ref: https://www.rabbitmq.com/rabbitmqctl.8.html#force_boot
   ##
-  forceBoot: false
+  forceBoot: true
 
   ## @param clustering.partitionHandling Switch Partition Handling Strategy. Either `autoheal` or `pause-minority` or `pause-if-all-down` or `ignore`
   ## ref: https://www.rabbitmq.com/partitions.html#automatic-handling
@@ -230,21 +228,17 @@ clustering:
 loadDefinition:
   ## @param loadDefinition.enabled Enable loading a RabbitMQ definitions file to configure RabbitMQ
   ##
-  enabled: false
-  ## @param loadDefinition.file Name of the definitions file
-  ##
-  file: "/app/load_definition.json"
+  enabled: true
   ## @param loadDefinition.existingSecret Existing secret with the load definitions file
   ## Can be templated if needed, e.g:
   ## existingSecret: "{{ .Release.Name }}-load-definition"
   ##
-  existingSecret: ""
+  existingSecret: "load-definition"
 
 ## @param command Override default container command (useful when using custom images)
 ##
 command: []
 ## @param args Override default container args (useful when using custom images)
-##
 args: []
 
 ## @param terminationGracePeriodSeconds Default duration in seconds k8s waits for container to exit before sending kill signal.
@@ -281,10 +275,12 @@ extraContainerPorts: []
 ## To add more configuration, use `extraConfiguration` of `advancedConfiguration` instead
 ##
 configuration: |-
+  {{- if not .Values.loadDefinition.enabled -}}
   ## Username and password
   ##
   default_user = {{ .Values.auth.username }}
   default_pass = CHANGEME
+  {{- end }}
   {{- if .Values.clustering.enabled }}
   ## Clustering
   ##
@@ -293,9 +289,6 @@ configuration: |-
   cluster_formation.node_cleanup.interval = 10
   cluster_formation.node_cleanup.only_log_warning = true
   cluster_partition_handling = {{ .Values.clustering.partitionHandling }}
-  {{- end }}
-  {{- if .Values.loadDefinition.enabled }}
-  load_definitions = {{ .Values.loadDefinition.file }}
   {{- end }}
   # queue master locator
   queue_master_locator = min-masters
@@ -338,8 +331,13 @@ configuration: |-
 ## Use this instead of `configuration` to add more configuration
 ##
 extraConfiguration: |-
-  #default_vhost = {{ .Release.Namespace }}-vhost
+  default_vhost = {{ .Release.Namespace }}-vhost
+  default_permissions.configure = .*
+  default_permissions.read = .*
+  default_permissions.write = .*
+  max_message_size = 536870912
   #disk_free_limit.absolute = 50MB
+  load_definitions = /app/load_definition.json
 
 ## @param advancedConfiguration Configuration file content: advanced configuration
 ## Use this as additional configuration in classic config format (Erlang term configuration format)
@@ -409,17 +407,42 @@ extraVolumes: []
 ##         ...
 ##       }
 ##
-extraSecrets: {}
+extraSecrets:
+  load-definition:
+    load_definition.json: |
+      {
+        "policies": [
+          {
+            "name": "ha-all",
+            "pattern": ".*\..*",
+            "vhost": "tchq",
+            "definition": {
+              "ha-mode": "all",
+              "ha-sync-mode": "automatic",
+              "ha-sync-batch-size": 1
+            }
+          },
+          {
+            "name": "ha-all",
+            "pattern": ".*\..*",
+            "vhost": "han",
+            "definition": {
+              "ha-mode": "all",
+              "ha-sync-mode": "automatic",
+              "ha-sync-batch-size": 1
+            }
+          }          
+        ]
+      }
 ## @param extraSecretsPrependReleaseName Set this flag to true if extraSecrets should be created with <release-name> prepended.
 ##
 extraSecretsPrependReleaseName: false
 
 ## @section Statefulset parameters
-##
 
 ## @param replicaCount Number of RabbitMQ replicas to deploy
 ##
-replicaCount: 1
+replicaCount: 3
 
 ## @param schedulerName Use an alternate scheduler, e.g. "stork".
 ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
@@ -437,7 +460,7 @@ schedulerName: ""
 ## ref : https://www.rabbitmq.com/clustering.html#restarting
 ## @param podManagementPolicy Pod management policy
 ##
-podManagementPolicy: OrderedReady
+podManagementPolicy: Parallel
 
 ## @param podLabels RabbitMQ Pod labels. Evaluated as a template
 ## Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
@@ -537,7 +560,7 @@ podSecurityContext:
 containerSecurityContext: {}
 
 ## RabbitMQ containers' resource requests and limits
-## ref: https://kubernetes.io/docs/user-guide/compute-resources/
+## ref: http://kubernetes.io/docs/user-guide/compute-resources/
 ## We usually recommend not to specify default resources and to leave this as a conscious
 ## choice for the user. This also increases chances charts run on environments with little
 ## resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -550,13 +573,11 @@ resources:
   ## limits:
   ##    cpu: 1000m
   ##    memory: 2Gi
-  ##
   limits: {}
   ## Examples:
   ## requests:
   ##    cpu: 1000m
   ##    memory: 2Gi
-  ##
   requests: {}
 
 ## Configure RabbitMQ containers' extra options for liveness probe
@@ -585,7 +606,7 @@ livenessProbe:
 ## @param readinessProbe.successThreshold Success threshold for readinessProbe
 ##
 readinessProbe:
-  enabled: true
+  enabled: false
   initialDelaySeconds: 10
   timeoutSeconds: 20
   periodSeconds: 30
@@ -644,7 +665,6 @@ pdb:
   maxUnavailable: ""
 
 ## @section RBAC parameters
-##
 
 ## RabbitMQ pods ServiceAccount
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
@@ -672,7 +692,6 @@ rbac:
   create: true
 
 ## @section Persistence parameters
-##
 
 persistence:
   ## @param persistence.enabled Enable RabbitMQ data persistence using PVC
@@ -702,14 +721,7 @@ persistence:
   ## So, for example, the name can depend on .Release or .Chart
   ##
   existingClaim: ""
-  ## @param persistence.mountPath The path the volume will be mounted at
-  ## Note: useful when using custom RabbitMQ images
-  ##
-  mountPath: /bitnami/rabbitmq/mnesia
-  ## @param persistence.subPath The subdirectory of the volume to mount to
-  ## Useful in dev environments and one PV for multiple services
-  ##
-  subPath: ""
+
   ## @param persistence.size PVC Storage Request for RabbitMQ data volume
   ## If you change this value, you might have to adjust `rabbitmq.diskFreeLimit` as well
   ##
@@ -728,17 +740,15 @@ persistence:
   annotations: {}
 
 ## @section Exposure parameters
-##
 
 ## Kubernetes service type
 ##
 service:
   ## @param service.type Kubernetes Service type
   ##
-  type: ClusterIP
+  type: NodePort
 
   ## @param service.portEnabled Amqp port. Cannot be disabled when `auth.tls.enabled` is `false`. Listener can be disabled with `listeners.tcp = none`.
-  ##
   portEnabled: true
 
   ## @param service.port Amqp port
@@ -763,17 +773,13 @@ service:
   ## e.g:
   ## nodePort: 30672
   ##
-  nodePort: ""
+  nodePort: "30672"
 
   ## @param service.tlsNodePort Node port override for `amqp-ssl` port, if serviceType is `NodePort` or `LoadBalancer`
   ## e.g:
   ## tlsNodePort: 30671
   ##
-  tlsNodePort: ""
-
-  ## @param service.distPortEnabled Erlang distribution server port
-  ##
-  distPortEnabled: true
+  tlsNodePort: "30671"
 
   ## @param service.distPort Erlang distribution server port
   ## ref: https://github.com/bitnami/bitnami-docker-rabbitmq#environment-variables
@@ -788,7 +794,7 @@ service:
   ## e.g:
   ## distNodePort: 30676
   ##
-  distNodePort: ""
+  distNodePort: "30676"
 
   ## @param service.managerPortEnabled RabbitMQ Manager port
   ## ref: https://github.com/bitnami/bitnami-docker-rabbitmq#environment-variables
@@ -807,7 +813,7 @@ service:
   ## e.g:
   ## managerNodePort: 30673
   ##
-  managerNodePort: ""
+  managerNodePort: "30673"
 
   ## @param service.metricsPort RabbitMQ Prometheues metrics port
   ##
@@ -821,17 +827,13 @@ service:
   ## e.g:
   ## metricsNodePort: 30674
   ##
-  metricsNodePort: ""
-
-  ## @param service.epmdPortEnabled RabbitMQ EPMD Discovery service port
-  ##
-  epmdPortEnabled: true
+  metricsNodePort: "30674"
 
   ## @param service.epmdNodePort Node port override for `epmd` port, if serviceType is `NodePort`
   ## e.g:
   ## epmdNodePort: 30675
   ##
-  epmdNodePort: ""
+  epmdNodePort: "30675"
 
   ## @param service.epmdPortName EPMD Discovery service port name
   ##
@@ -859,7 +861,7 @@ service:
   externalIPs: []
 
   ## @param service.externalTrafficPolicy Enable client source IP preservation
-  ## ref https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+  ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
   ##
   externalTrafficPolicy: Cluster
 
@@ -886,7 +888,7 @@ service:
 
 ## Configure the ingress resource that allows you to access the
 ## RabbitMQ installation. Set up the URL
-## ref: https://kubernetes.io/docs/user-guide/ingress/
+## ref: http://kubernetes.io/docs/user-guide/ingress/
 ##
 ingress:
   ## @param ingress.enabled Enable ingress resource for Management console
@@ -944,11 +946,6 @@ ingress:
   ##     path: /
   ##
   extraHosts: []
-
-  ## @param ingress.extraRules The list of additional rules to be added to this ingress record. Evaluated as a template
-  ## Useful when looking for additional customization, such as using different backend
-  ##
-  extraRules: []
 
   ## @param ingress.extraTls The tls configuration for additional hostnames to be covered with this ingress record.
   ## see: https://kubernetes.io/docs/concepts/services-networking/ingress/#tls
@@ -1015,7 +1012,6 @@ networkPolicy:
   additionalRules: []
 
 ## @section Metrics Parameters
-##
 
 ## Prometheus Metrics
 ##
@@ -1053,15 +1049,9 @@ metrics:
     ## scrapeTimeout: 30s
     ##
     scrapeTimeout: ""
-    ## @param metrics.serviceMonitor.relabellings MetricsRelabelConfigs to apply to samples before ingestion. DEPRECATED: Will be removed in next major.
+    ## @param metrics.serviceMonitor.relabellings Specify Metric Relabellings to add to the scrape endpoint
     ##
     relabellings: []
-    ## @param metrics.serviceMonitor.relabelings RelabelConfigs to apply to samples before scraping.
-    ##
-    relabelings: []
-    ## @param metrics.serviceMonitor.metricRelabelings MetricsRelabelConfigs to apply to samples before ingestion.
-    ##
-    metricRelabelings: []
     ## @param metrics.serviceMonitor.honorLabels honorLabels chooses the metric's labels on collisions with target labels
     ##
     honorLabels: false
@@ -1081,7 +1071,6 @@ metrics:
     podTargetLabels: {}
     ## @param metrics.serviceMonitor.path Define the path used by ServiceMonitor to scrap metrics
     ## Could be /metrics for aggregated metrics or /metrics/per-object for more details
-    ##
     path: ""
 
   ## Custom PrometheusRule to be defined
@@ -1159,7 +1148,6 @@ metrics:
     rules: []
 
 ## @section Init Container Parameters
-##
 
 ## Init Container parameters
 ## Change the owner and group of the persistent volume(s) mountpoint(s) to 'runAsUser:fsGroup' on each component
@@ -1178,10 +1166,10 @@ volumePermissions:
   image:
     registry: docker.io
     repository: bitnami/bitnami-shell
-    tag: 10-debian-10-r388
+    tag: 10-debian-10-r261
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
-    ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+    ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
     ##
     pullPolicy: IfNotPresent
     ## Optionally specify an array of imagePullSecrets (secrets must be manually created in the namespace)
@@ -1192,7 +1180,7 @@ volumePermissions:
     ##
     pullSecrets: []
   ## Init Container resource requests and limits
-  ## ref: https://kubernetes.io/docs/user-guide/compute-resources/
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ## We usually recommend not to specify default resources and to leave this as a conscious
   ## choice for the user. This also increases chances charts run on environments with little
   ## resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -1205,11 +1193,9 @@ volumePermissions:
     ## limits:
     ##    cpu: 100m
     ##    memory: 128Mi
-    ##
     limits: {}
     ## Examples:
     ## requests:
     ##    cpu: 100m
     ##    memory: 128Mi
-    ##
     requests: {}
