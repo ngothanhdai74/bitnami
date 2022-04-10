@@ -124,7 +124,7 @@ master:
     storageClass: ""
     accessModes:
       - ReadWriteOnce
-    size: 8Gi
+    size: 5Gi
     annotations: {}
     selector: {}
     dataSource: {}
@@ -141,7 +141,7 @@ master:
     annotations: {}
   terminationGracePeriodSeconds: 30
 replica:
-  replicaCount: 3
+  replicaCount: 1
   configuration: ""
   disableCommands: {}
   command: []
@@ -229,16 +229,16 @@ replica:
     storageClass: ""
     accessModes:
       - ReadWriteOnce
-    size: 8Gi
+    size: 5Gi
     annotations: {}
     selector: {}
     dataSource: {}
   service:
-    type: ClusterIP
+    type: NodePort
     ports:
       redis: 6379
     nodePorts:
-      redis: ""
+      redis: "30380"
     externalTrafficPolicy: Cluster
     extraPorts: []
     clusterIP: ""
