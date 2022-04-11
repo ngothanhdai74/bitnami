@@ -23,10 +23,10 @@ diagnosticMode:
 hostAliases: []
 commonAnnotations: {}
 auth:
-  username: user
-  password: ""
+  username: admin
+  password: "Abcd123$"
   existingPasswordSecret: ""
-  erlangCookie: ""
+  erlangCookie: "erlangCookie"
   existingErlangSecret: ""
   tls:
     enabled: false
@@ -53,7 +53,7 @@ clustering:
   enabled: true
   addressType: hostname
   rebalance: false
-  forceBoot: false
+  forceBoot: true
   partitionHandling: autoheal
 loadDefinition:
   enabled: false
@@ -204,27 +204,27 @@ persistence:
   volumes: []
   annotations: {}
 service:
-  type: ClusterIP
+  type: NodePort
   portEnabled: true
   port: 5672
   portName: amqp
   tlsPort: 5671
   tlsPortName: amqp-ssl
-  nodePort: ""
-  tlsNodePort: ""
+  nodePort: "30672"
+  tlsNodePort: "30671"
   distPortEnabled: true
   distPort: 25672
   distPortName: dist
-  distNodePort: ""
+  distNodePort: "30676"
   managerPortEnabled: true
   managerPort: 15672
   managerPortName: http-stats
-  managerNodePort: ""
+  managerNodePort: "30673"
   metricsPort: 9419
   metricsPortName: metrics
-  metricsNodePort: ""
+  metricsNodePort: "30674"
   epmdPortEnabled: true
-  epmdNodePort: ""
+  epmdNodePort: "30675"
   epmdPortName: epmd
   extraPorts: []
   loadBalancerSourceRanges: []
